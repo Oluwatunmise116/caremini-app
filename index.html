@@ -230,7 +230,6 @@
         <div class="controls">
             <button class="btn btn-primary" id="connectBtn">Connect to CareMini</button>
             <button class="btn btn-secondary" id="syncTimeBtn" disabled>🕒 Sync Time Now</button>
-            <button class="btn btn-secondary" id="testLedBtn" disabled>💡 Test LED</button>
         </div>
         
         <div class="reminders" id="remindersSection">
@@ -350,7 +349,6 @@
                         // Enable buttons
                         document.getElementById('connectBtn').textContent = 'Disconnect';
                         document.getElementById('syncTimeBtn').disabled = false;
-                        document.getElementById('testLedBtn').disabled = false;
                         
                         // Auto-sync time immediately
                         setTimeout(() => this.syncTime(), 500);
@@ -423,7 +421,7 @@
                     
                     if (data.type === 'state' && data.clock) {
                         this.deviceTime = data.clock;
-                        const deviceTimeStr = `${String(data.clock.h).padStart(2,'0')}:${String(data.clock.m).padStart(2,'0')}`;
+                        const deviceTimeStr = `${String(data.clock.h).padStart(2,'0')}:${String(data.clock.m).padStart(2,'0')}:${String(data.clock.s).padStart(2,'0')}`;
                         document.getElementById('deviceTime').textContent = `Device: ${deviceTimeStr}`;
                         
                         if (data.reminders) {
@@ -431,13 +429,26 @@
                         }
                     }
                     
-                    if (data.type === 'ack' && data.cmd === 'syncTime') {
-                        this.log('✓ Time synchronized successfully!');
+                    if (data.type === 'ack') {
+                        this.log(`✓ ${data.cmd} completed: ${data.msg || 'success'}`);
+                        
+                        // Refresh reminders list after add/delete operations
+                        if (data.cmd === 'add' || data.cmd === 'delete') {
+                            setTimeout(() => {
+                                this.sendCommand('{"cmd":"list"}');
+                            }, 300);
+                        }
                     }
                     
                 } catch (e) {
                     if (message.includes('TIME_SYNCED')) {
-                        this.log('✓ Time synchronized!');
+                        this.log('✓ Time synchronized with seconds!');
+                        // Extract and display the synced time
+                        const timeMatch = message.match(/TIME_SYNCED:(\d+):(\d+):(\d+)/);
+                        if (timeMatch) {
+                            const deviceTimeStr = `${timeMatch[1].padStart(2,'0')}:${timeMatch[2].padStart(2,'0')}:${timeMatch[3].padStart(2,'0')}`;
+                            document.getElementById('deviceTime').textContent = `Device: ${deviceTimeStr}`;
+                        }
                     }
                 }
             }
@@ -459,10 +470,26 @@
             
             syncTime() {
                 const now = new Date();
-                // Send only simple format to avoid JSON parsing issues
-                const command = `TIME:${now.getHours()}:${now.getMinutes()}`;
-                this.sendCommand(command);
-                this.log('Syncing time...');
+                const timestamp = Math.floor(now.getTime() / 1000); // Unix timestamp
+                
+                this.log(`Syncing time with timestamp: ${timestamp}`);
+                this.log(`Current time: ${now.toTimeString().slice(0, 8)}`);
+                
+                // Send timestamp format (primary method)
+                const timestampCmd = `TIMESTAMP:${timestamp}`;
+                this.sendCommand(timestampCmd);
+                
+                // Also send JSON format with timestamp as backup
+                setTimeout(() => {
+                    const jsonCmd = JSON.stringify({
+                        cmd: "syncTime",
+                        timestamp: timestamp,
+                        h: now.getHours(),
+                        m: now.getMinutes(),
+                        s: now.getSeconds()
+                    });
+                    this.sendCommand(jsonCmd);
+                }, 200);
             }
             
             testLED() {
@@ -480,7 +507,6 @@
                 
                 document.getElementById('connectBtn').textContent = 'Connect to CareMini';
                 document.getElementById('syncTimeBtn').disabled = true;
-                document.getElementById('testLedBtn').disabled = false;
             }
             
             updateRemindersList(reminders) {
