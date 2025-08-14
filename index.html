@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CareMini Controller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .disconnected { background: #ff4757; }
+        .connecting { background: #ffa502; }
+        .connected { background: #2ed573; }
+        
+        .current-time {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        
+        .device-time {
+            font-size: 18px;
+            color: #666;
+        }
+        
+        .controls {
+            padding: 20px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #f1f2f6;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #ddd;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .reminders {
+            padding: 20px;
+            border-top: 1px solid #eee;
+        }
+        
+        .reminder-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .reminder-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .reminder-label {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .reminder-time {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .reminder-type {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .add-reminder {
+            background: white;
+            border: 2px dashed #ddd;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .add-reminder:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .form-group {
+            margin: 15px 0;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        .log {
+            padding: 20px;
+            background: #f8f9fa;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 CareMini</h1>
+            <p>Smart Medication Reminder</p>
+        </div>
+        
+        <div class="status">
+            <div id="connectionStatus">
+                <span class="status-indicator disconnected"></span>
+                <span>Disconnected</span>
+            </div>
+            <div class="current-time" id="phoneTime">--:--:--</div>
+            <div class="device-time" id="deviceTime">Device: --:--</div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" id="connectBtn">Connect to CareMini</button>
+            <button class="btn btn-secondary" id="syncTimeBtn" disabled>🕒 Sync Time Now</button>
+            <button class="btn btn-secondary" id="testLedBtn" disabled>💡 Test LED</button>
+        </div>
+        
+        <div class="reminders" id="remindersSection">
+            <h3>📋 Reminders</h3>
+            <div id="remindersList"></div>
+            
+            <div class="add-reminder" id="addReminderBtn">
+                <span>+ Add New Reminder</span>
+            </div>
+            
+            <div id="addReminderForm" class="hidden">
+                <div class="form-group">
+                    <label>Medication/Activity Name:</label>
+                    <input type="text" id="reminderLabel" placeholder="e.g., Blood Pressure Pills">
+                </div>
+                <div class="form-group">
+                    <label>Time:</label>
+                    <input type="time" id="reminderTime">
+                </div>
+                <div class="form-group">
+                    <label>Type:</label>
+                    <select id="reminderType">
+                        <option value="0">💊 Medication</option>
+                        <option value="1">🏃 Exercise</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" id="saveReminderBtn">Save Reminder</button>
+                <button class="btn btn-secondary" id="cancelReminderBtn">Cancel</button>
+            </div>
+        </div>
+        
+        <div class="log" id="logSection">
+            <strong>Connection Log:</strong>
+            <div id="logContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        class CareMiniApp {
+            constructor() {
+                this.device = null;
+                this.characteristic = null;
+                this.connected = false;
+                this.deviceTime = { h: 0, m: 0, s: 0 };
+                
+                this.initializeUI();
+                this.startTimeUpdates();
+            }
+            
+            initializeUI() {
+                document.getElementById('connectBtn').addEventListener('click', () => this.connect());
+                document.getElementById('syncTimeBtn').addEventListener('click', () => this.syncTime());
+                document.getElementById('testLedBtn').addEventListener('click', () => this.testLED());
+                document.getElementById('addReminderBtn').addEventListener('click', () => this.showAddForm());
+                document.getElementById('saveReminderBtn').addEventListener('click', () => this.saveReminder());
+                document.getElementById('cancelReminderBtn').addEventListener('click', () => this.hideAddForm());
+                
+                // Set current time as default for new reminders
+                const now = new Date();
+                const timeString = now.toTimeString().slice(0, 5);
+                document.getElementById('reminderTime').value = timeString;
+            }
+            
+            startTimeUpdates() {
+                setInterval(() => {
+                    const now = new Date();
+                    const timeString = now.toTimeString().slice(0, 8);
+                    document.getElementById('phoneTime').textContent = timeString;
+                }, 1000);
+            }
+            
+            log(message) {
+                const logContainer = document.getElementById('logContainer');
+                const time = new Date().toTimeString().slice(0, 8);
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                entry.textContent = `[${time}] ${message}`;
+                logContainer.appendChild(entry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+            
+            updateStatus(status, indicator) {
+                const statusEl = document.getElementById('connectionStatus');
+                const indicatorClass = indicator || 'disconnected';
+                statusEl.innerHTML = `<span class="status-indicator ${indicatorClass}"></span><span>${status}</span>`;
+            }
+            
+            async connect() {
+                try {
+                    this.updateStatus('Scanning...', 'connecting');
+                    this.log('Starting BLE scan...');
+                    
+                    const device = await navigator.bluetooth.requestDevice({
+                        filters: [{ name: 'CareMini' }],
+                        optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+                    });
+                    
+                    this.log(`Found device: ${device.name}`);
+                    this.updateStatus('Connecting...', 'connecting');
+                    
+                    const server = await device.gatt.connect();
+                    const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+                    
+                    // Get TX characteristic (notifications from device)
+                    const txChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+                    await txChar.startNotifications();
+                    txChar.addEventListener('characteristicvaluechanged', (event) => {
+                        const value = new TextDecoder().decode(event.target.value);
+                        this.handleDeviceMessage(value);
+                    });
+                    
+                    // Get RX characteristic (send commands to device)
+                    this.characteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+                    
+                    this.device = device;
+                    this.connected = true;
+                    this.updateStatus('Connected ✓', 'connected');
+                    this.log('Connected successfully!');
+                    
+                    // Enable buttons
+                    document.getElementById('connectBtn').textContent = 'Disconnect';
+                    document.getElementById('syncTimeBtn').disabled = false;
+                    document.getElementById('testLedBtn').disabled = false;
+                    
+                    // Auto-sync time immediately
+                    setTimeout(() => this.syncTime(), 500);
+                    
+                    // Request current state
+                    setTimeout(() => this.sendCommand('{"cmd":"list"}'), 1000);
+                    
+                    device.addEventListener('gattserverdisconnected', () => {
+                        this.handleDisconnect();
+                    });
+                    
+                } catch (error) {
+                    this.log(`Connection failed: ${error.message}`);
+                    this.updateStatus('Connection Failed', 'disconnected');
+                }
+            }
+            
+            handleDisconnect() {
+                this.connected = false;
+                this.updateStatus('Disconnected', 'disconnected');
+                this.log('Device disconnected');
+                
+                document.getElementById('connectBtn').textContent = 'Connect to CareMini';
+                document.getElementById('syncTimeBtn').disabled = true;
+                document.getElementById('testLedBtn').disabled = true;
+            }
+            
+            async sendCommand(command) {
+                if (!this.connected || !this.characteristic) {
+                    this.log('Not connected to device');
+                    return;
+                }
+                
+                try {
+                    const encoder = new TextEncoder();
+                    await this.characteristic.writeValue(encoder.encode(command));
+                    this.log(`Sent: ${command}`);
+                } catch (error) {
+                    this.log(`Send failed: ${error.message}`);
+                }
+            }
+            
+            syncTime() {
+                const now = new Date();
+                const command = JSON.stringify({
+                    cmd: "syncTime",
+                    h: now.getHours(),
+                    m: now.getMinutes(),
+                    s: now.getSeconds()
+                });
+                this.sendCommand(command);
+                this.log('Auto-syncing time...');
+            }
+            
+            testLED() {
+                this.sendCommand('{"cmd":"ledon"}');
+                setTimeout(() => {
+                    this.sendCommand('{"cmd":"ledoff"}');
+                }, 2000);
+                this.log('Testing LED...');
+            }
+            
+            handleDeviceMessage(message) {
+                this.log(`Received: ${message}`);
+                
+                try {
+                    const data = JSON.parse(message);
+                    
+                    if (data.type === 'state' && data.clock) {
+                        this.deviceTime = data.clock;
+                        const deviceTimeStr = `${String(data.clock.h).padStart(2,'0')}:${String(data.clock.m).padStart(2,'0')}`;
+                        document.getElementById('deviceTime').textContent = `Device: ${deviceTimeStr}`;
+                        
+                        if (data.reminders) {
+                            this.updateRemindersList(data.reminders);
+                        }
+                    }
+                    
+                    if (data.type === 'ack' && data.cmd === 'syncTime') {
+                        this.log('✓ Time synchronized successfully!');
+                    }
+                    
+                } catch (e) {
+                    // Handle non-JSON messages
+                    if (message.includes('TIME_SYNCED')) {
+                        this.log('✓ Time synchronized!');
+                    }
+                }
+            }
+            
+            updateRemindersList(reminders) {
+                const container = document.getElementById('remindersList');
+                container.innerHTML = '';
+                
+                reminders.forEach((reminder, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'reminder-item';
+                    
+                    const timeStr = `${String(reminder.hour).padStart(2,'0')}:${String(reminder.minute).padStart(2,'0')}`;
+                    const typeStr = reminder.type === 0 ? '💊 Medication' : '🏃 Exercise';
+                    const statusStr = reminder.enabled ? '✅' : '⏸️';
+                    
+                    item.innerHTML = `
+                        <div class="reminder-header">
+                            <span class="reminder-label">${reminder.label} ${statusStr}</span>
+                            <span class="reminder-time">${timeStr}</span>
+                        </div>
+                        <div class="reminder-type">${typeStr}</div>
+                        <button onclick="app.deleteReminder(${index})" style="margin-top: 10px; padding: 5px 10px; background: #ff4757; color: white; border: none; border-radius: 5px; cursor: pointer;">Delete</button>
+                    `;
+                    
+                    container.appendChild(item);
+                });
+            }
+            
+            showAddForm() {
+                document.getElementById('addReminderBtn').classList.add('hidden');
+                document.getElementById('addReminderForm').classList.remove('hidden');
+            }
+            
+            hideAddForm() {
+                document.getElementById('addReminderBtn').classList.remove('hidden');
+                document.getElementById('addReminderForm').classList.add('hidden');
+                this.clearForm();
+            }
+            
+            clearForm() {
+                document.getElementById('reminderLabel').value = '';
+                document.getElementById('reminderType').value = '0';
+                const now = new Date();
+                document.getElementById('reminderTime').value = now.toTimeString().slice(0, 5);
+            }
+            
+            saveReminder() {
+                const label = document.getElementById('reminderLabel').value.trim();
+                const time = document.getElementById('reminderTime').value;
+                const type = document.getElementById('reminderType').value;
+                
+                if (!label || !time) {
+                    alert('Please fill in all fields');
+                    return;
+                }
+                
+                const [hours, minutes] = time.split(':').map(n => parseInt(n));
+                
+                const command = JSON.stringify({
+                    cmd: "add",
+                    lbl: label,
+                    hh: hours,
+                    mm: minutes,
+                    typ: parseInt(type)
+                });
+                
+                this.sendCommand(command);
+                this.hideAddForm();
+                
+                // Refresh list after a delay
+                setTimeout(() => {
+                    this.sendCommand('{"cmd":"list"}');
+                }, 500);
+            }
+            
+            deleteReminder(index) {
+                if (confirm('Delete this reminder?')) {
+                    const command = JSON.stringify({
+                        cmd: "delete",
+                        index: index
+                    });
+                    this.sendCommand(command);
+                    
+                    // Refresh list after a delay
+                    setTimeout(() => {
+                        this.sendCommand('{"cmd":"list"}');
+                    }, 500);
+                }
+            }
+        }
+        
+        // Initialize app when page loads
+        let app;
+        window.addEventListener('load', () => {
+            if ('bluetooth' in navigator) {
+                app = new CareMiniApp();
+            } else {
+                document.body.innerHTML = '<div style="text-align: center; padding: 50px;"><h2>Web Bluetooth not supported</h2><p>Please use Chrome on Android or Chrome/Edge on desktop</p></div>';
+            }
+        });
+    </script>
+</body>
+</html>
