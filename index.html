@@ -312,27 +312,62 @@
                     this.updateStatus('Scanning...', 'connecting');
                     this.log('Starting BLE scan...');
                     
+                    // More flexible device selection
                     const device = await navigator.bluetooth.requestDevice({
-                        filters: [{ name: 'CareMini' }],
-                        optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+                        acceptAllDevices: true,
+                        optionalServices: [
+                            '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+                            '4fafc201-1fb5-459e-8fcc-c5c9c331914b'  // Fallback service
+                        ]
                     });
                     
-                    this.log(`Found device: ${device.name}`);
+                    this.log(`Found device: ${device.name || 'Unknown'}`);
                     this.updateStatus('Connecting...', 'connecting');
                     
                     const server = await device.gatt.connect();
-                    const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+                    this.log('GATT server connected');
                     
-                    // Get TX characteristic (notifications from device)
-                    const txChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-                    await txChar.startNotifications();
-                    txChar.addEventListener('characteristicvaluechanged', (event) => {
-                        const value = new TextDecoder().decode(event.target.value);
-                        this.handleDeviceMessage(value);
-                    });
+                    // Try primary service first
+                    let service;
+                    try {
+                        service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+                        this.log('Found Nordic UART service');
+                    } catch (e) {
+                        this.log('Nordic UART service not found, trying fallback...');
+                        try {
+                            service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+                            this.log('Found fallback service');
+                        } catch (e2) {
+                            throw new Error('No compatible service found');
+                        }
+                    }
                     
-                    // Get RX characteristic (send commands to device)
-                    this.characteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+                    // Get characteristics with error handling
+                    try {
+                        // Try Nordic UART characteristics first
+                        const txChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+                        await txChar.startNotifications();
+                        txChar.addEventListener('characteristicvaluechanged', (event) => {
+                            const value = new TextDecoder().decode(event.target.value);
+                            this.handleDeviceMessage(value);
+                        });
+                        this.log('TX characteristic configured');
+                        
+                        this.characteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+                        this.log('RX characteristic found');
+                        
+                    } catch (e) {
+                        this.log('Nordic UART chars not found, trying fallback...');
+                        // Try fallback characteristic
+                        const char = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+                        await char.startNotifications();
+                        char.addEventListener('characteristicvaluechanged', (event) => {
+                            const value = new TextDecoder().decode(event.target.value);
+                            this.handleDeviceMessage(value);
+                        });
+                        this.characteristic = char;
+                        this.log('Fallback characteristic configured');
+                    }
                     
                     this.device = device;
                     this.connected = true;
@@ -356,7 +391,13 @@
                     
                 } catch (error) {
                     this.log(`Connection failed: ${error.message}`);
-                    this.updateStatus('Connection Failed', 'disconnected');
+                    this.updateStatus('Connection Failed - Try enabling Chrome flags', 'disconnected');
+                    
+                    // Show helpful error message
+                    if (error.message.includes('GATT') || error.message.includes('Not supported')) {
+                        this.log('SOLUTION: Go to chrome://flags and enable "Experimental Web Platform features"');
+                        this.log('Or try: Settings > Site Settings > Bluetooth > Allow');
+                    }
                 }
             }
             
