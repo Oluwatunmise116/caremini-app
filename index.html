@@ -214,7 +214,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🏥 CareMini</h1>
+            <h1>🏥 CareMinii</h1>
             <p>Smart Medication Reminder</p>
         </div>
         
@@ -433,7 +433,15 @@
                         this.log(`✓ ${data.cmd} completed: ${data.msg || 'success'}`);
                         
                         // Refresh reminders list after add/delete operations
-                        if (data.cmd === 'add' || data.cmd === 'delete') {
+                        if (data.cmd === 'add') {
+                            this.log('Reminder added successfully! Refreshing list...');
+                            setTimeout(() => {
+                                this.sendCommand('{"cmd":"list"}');
+                            }, 300);
+                        }
+                        
+                        if (data.cmd === 'delete') {
+                            this.log('Reminder deleted! Refreshing list...');
                             setTimeout(() => {
                                 this.sendCommand('{"cmd":"list"}');
                             }, 300);
@@ -562,7 +570,17 @@
                     return;
                 }
                 
+                if (!this.connected) {
+                    alert('Please connect to CareMini first');
+                    return;
+                }
+                
                 const [hours, minutes] = time.split(':').map(n => parseInt(n));
+                
+                if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+                    alert('Invalid time format');
+                    return;
+                }
                 
                 const command = JSON.stringify({
                     cmd: "add",
@@ -572,12 +590,9 @@
                     typ: parseInt(type)
                 });
                 
+                this.log(`Adding reminder: ${label} at ${hours}:${minutes}`);
                 this.sendCommand(command);
                 this.hideAddForm();
-                
-                setTimeout(() => {
-                    this.sendCommand('{"cmd":"list"}');
-                }, 500);
             }
             
             deleteReminder(index) {
