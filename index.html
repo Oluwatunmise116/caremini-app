@@ -331,17 +331,25 @@
             
             syncTime() {
                 const now = new Date();
-                const timeCmd = `TIME:${now.getHours()}:${now.getMinutes()}`;
+                const h = now.getHours();
+                const m = now.getMinutes();
+                const s = now.getSeconds();
+                
+                // Send simple format first
+                const timeCmd = `TIME:${h}:${m}`;
+                this.log(`Syncing time: ${h}:${m}:${s}`);
                 this.sendCommand(timeCmd);
                 
-                // Also try JSON format
-                const jsonCmd = JSON.stringify({
-                    cmd: "syncTime",
-                    h: now.getHours(),
-                    m: now.getMinutes(),
-                    s: now.getSeconds()
-                });
-                setTimeout(() => this.sendCommand(jsonCmd), 100);
+                // Also try JSON format as backup
+                setTimeout(() => {
+                    const jsonCmd = JSON.stringify({
+                        cmd: "syncTime",
+                        h: h,
+                        m: m,
+                        s: s
+                    });
+                    this.sendCommand(jsonCmd);
+                }, 200);
             }
             
             testLED() {
