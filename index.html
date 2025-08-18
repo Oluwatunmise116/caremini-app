@@ -402,16 +402,6 @@
 
                 const encoder = new TextEncoder();
                 await reminderCharacteristic.writeValue(encoder.encode(reminderString));
-
-                // Add to local list
-                reminders.push({
-                    hour: hour,
-                    minute: minute,
-                    type: type,
-                    message: message
-                });
-
-                updateRemindersDisplay();
                 
                 // Clear form
                 document.getElementById('reminderMessage').value = '';
@@ -421,6 +411,29 @@
             } catch (error) {
                 console.error('Failed to add reminder:', error);
                 alert('Failed to add reminder');
+            }
+        }
+
+        async function deleteReminder(id) {
+            if (!isConnected) return;
+
+            try {
+                const deleteData = {
+                    action: 'delete',
+                    id: id
+                };
+
+                const deleteString = JSON.stringify(deleteData);
+                console.log('Deleting reminder:', deleteString);
+
+                const encoder = new TextEncoder();
+                await reminderCharacteristic.writeValue(encoder.encode(deleteString));
+                
+                console.log('Reminder deleted successfully');
+
+            } catch (error) {
+                console.error('Failed to delete reminder:', error);
+                alert('Failed to delete reminder');
             }
         }
 
