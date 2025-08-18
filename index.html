@@ -189,8 +189,9 @@
     <!-- Active Reminders -->
     <div class="container">
         <h2>Active Reminders</h2>
+        <p><small>Reminders are automatically saved to watch memory and will persist after power off.</small></p>
         <div id="remindersList" class="reminder-list">
-            <p>No reminders set</p>
+            <p>Loading reminders...</p>
         </div>
     </div>
 
@@ -295,8 +296,10 @@
                 
                 // Auto-sync time on connection
                 await syncTime();
-
-                console.log('Connected to Alzheimer Watch');
+                
+                // The ESP32 automatically sends reminder list when connected
+                // No need to manually request it
+                console.log('Connected to Alzheimer Watch - waiting for reminder list...');
 
             } catch (error) {
                 console.error('Connection failed:', error);
@@ -327,6 +330,9 @@
                 syncTimeBtn.disabled = false;
                 addReminderBtn.disabled = false;
                 clearRemindersBtn.disabled = false;
+                
+                // Show loading state for reminders
+                remindersList.innerHTML = '<p>⏳ Loading saved reminders from watch memory...</p>';
             } else {
                 connectionStatus.innerHTML = 'Disconnected';
                 connectionStatus.className = 'status disconnected';
@@ -335,6 +341,10 @@
                 syncTimeBtn.disabled = true;
                 addReminderBtn.disabled = true;
                 clearRemindersBtn.disabled = true;
+                
+                // Clear reminders display when disconnected
+                reminders = [];
+                remindersList.innerHTML = '<p>Connect to watch to view saved reminders</p>';
             }
         }
 
@@ -440,15 +450,16 @@
         async function clearAllReminders() {
             if (!isConnected) return;
 
+            if (!confirm('Are you sure you want to clear all reminders?')) {
+                return;
+            }
+
             try {
                 const clearData = { action: 'clear' };
                 const clearString = JSON.stringify(clearData);
                 
                 const encoder = new TextEncoder();
                 await reminderCharacteristic.writeValue(encoder.encode(clearString));
-
-                reminders = [];
-                updateRemindersDisplay();
                 
                 console.log('All reminders cleared');
 
@@ -459,32 +470,66 @@
         }
 
         function updateRemindersDisplay() {
-            if (reminders.length === 0) {
-                remindersList.innerHTML = '<p>No reminders set</p>';
+            console.log('Updating reminders display with:', reminders);
+            
+            if (!reminders || reminders.length === 0) {
+                remindersList.innerHTML = '<p>No reminders saved in watch memory</p>';
                 return;
             }
 
-            let html = '';
-            reminders.forEach((reminder, index) => {
+            let html = `<p><strong>📱 ${reminders.length} reminder(s) loaded from watch memory:</strong></p>`;
+            reminders.forEach((reminder) => {
                 const timeStr = `${reminder.hour.toString().padStart(2, '0')}:${reminder.minute.toString().padStart(2, '0')}`;
                 const icon = reminder.type === 'medication' ? '💊' : '🏃';
                 
                 html += `
                     <div class="reminder-item ${reminder.type}">
-                        <strong>${icon} ${timeStr}</strong> - ${reminder.message}
-                        <br><small>Type: ${reminder.type}</small>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${icon} ${timeStr}</strong> - ${reminder.message}
+                                <br><small>Type: ${reminder.type} | ID: ${reminder.id} | Stored in watch</small>
+                            </div>
+                            <button onclick="deleteReminder(${reminder.id})" style="background-color: #dc3545; padding: 5px 10px; font-size: 12px; border: none; border-radius: 3px; color: white; cursor: pointer;">Delete</button>
+                        </div>
                     </div>
                 `;
             });
             
             remindersList.innerHTML = html;
+            console.log('Reminders display updated with', reminders.length, 'items');
         }
 
         function handleStatusUpdate(event) {
             const decoder = new TextDecoder();
             const statusMessage = decoder.decode(event.target.value);
             
-            console.log('Status update:', statusMessage);
+            console.log('Status update received:', statusMessage);
+            
+            // Check if it's a reminder list update
+            try {
+                const data = JSON.parse(statusMessage);
+                
+                // Handle different types of reminder data
+                if (data.action === 'reminder_list' || (data.action === 'list' && data.reminders)) {
+                    console.log('Received reminder list:', data);
+                    reminders = data.reminders || [];
+                    updateRemindersDisplay();
+                    return;
+                }
+                
+                // Handle legacy format
+                if (data.reminders && Array.isArray(data.reminders)) {
+                    console.log('Received legacy reminder format:', data.reminders);
+                    reminders = data.reminders;
+                    updateRemindersDisplay();
+                    return;
+                }
+                
+            } catch (e) {
+                console.log('Not JSON data, treating as status message:', e);
+            }
+            
+            // Regular status message
             watchStatus.innerHTML = `<strong>Latest:</strong> ${statusMessage}`;
             
             // Show alert indicator if it's an alert message
@@ -493,6 +538,25 @@
                 setTimeout(() => {
                     alertStatus.style.display = 'none';
                 }, 60000); // Hide after 1 minute
+            }
+        }
+
+        // Request reminder list when connected
+        async function requestReminderList() {
+            if (!isConnected) return;
+
+            try {
+                console.log('Requesting reminder list from ESP32...');
+                const listRequest = { action: 'list' };
+                const listString = JSON.stringify(listRequest);
+                
+                const encoder = new TextEncoder();
+                await reminderCharacteristic.writeValue(encoder.encode(listString));
+                
+                console.log('Reminder list request sent');
+                
+            } catch (error) {
+                console.error('Failed to request reminder list:', error);
             }
         }
 
